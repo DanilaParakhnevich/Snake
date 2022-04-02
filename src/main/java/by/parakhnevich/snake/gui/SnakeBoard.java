@@ -3,6 +3,7 @@ package by.parakhnevich.snake.gui;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
 
 import static java.awt.event.KeyEvent.*;
 
@@ -15,15 +16,17 @@ public class SnakeBoard extends JPanel implements ActionListener {
     private boolean inGame = true;
     private static final int B_WIDTH = 300;
     private static final int B_HEIGHT = 300;
-    private int[] x = new int[900];
-    private int[] y = new int[900];
+    private static final int FIGURE_SIZE = 10;
+    private static final int MAX_SNAKE_SIZE = (int) (B_WIDTH * B_HEIGHT / Math.pow(FIGURE_SIZE, 2));
+    private final java.util.List<Integer> x = new ArrayList<>(MAX_SNAKE_SIZE);
+    private final java.util.List<Integer> y = new ArrayList<>(MAX_SNAKE_SIZE);
     private int dotsCount = 3;
     private int appleX;
     private int appleY;
     private Image head;
     private Image body;
     private Image apple;
-    private Timer timer;
+    private final Timer timer = new Timer(70, this);
 
 
 
@@ -35,7 +38,10 @@ public class SnakeBoard extends JPanel implements ActionListener {
         addKeyListener(new TAdapter());
         setBackground(Color.BLACK);
         setFocusable(true);
-
+        for (int i = 0; i < B_WIDTH / FIGURE_SIZE; i++) {
+            x.add(0);
+            y.add(0);
+        }
         setPreferredSize(new Dimension(B_WIDTH, B_HEIGHT));
         loadImages();
         initGame();
@@ -58,41 +64,43 @@ public class SnakeBoard extends JPanel implements ActionListener {
             g.drawImage(apple, appleX, appleY, this);
             for (int i = 0; i < dotsCount; i++) {
                 if (i == 0) {
-                    g.drawImage(head, x[i], y[i], this);
+                    g.drawImage(head, x.get(i), y.get(i), this);
                 } else {
-                    g.drawImage(body, x[i], y[i], this);
+                    g.drawImage(body, x.get(i), y.get(i), this);
                 }
             }
             Toolkit.getDefaultToolkit().sync();
+        } else if (x.size() == MAX_SNAKE_SIZE) {
+            sendMessage(g, "Victory!");
+            timer.stop();
         } else {
-            gameOver(g);
+            sendMessage(g, "Game over\nPress \'R\' to restart game");
+            timer.stop();
         }
     }
 
-    private void gameOver(Graphics g) {
+    private void sendMessage(Graphics g, String message) {
         Font font = new Font("Helvetica", Font.BOLD, 14);
-        FontMetrics fontMetrics = getFontMetrics(font);
         g.setColor(Color.WHITE);
         g.setFont(font);
-        g.drawString("Game over", (B_WIDTH - 9) / 2, B_HEIGHT / 2);
+        g.drawString(message, (B_WIDTH - 9) / 2, B_HEIGHT / 2);
     }
 
 
     private void initGame() {
         for (int i = 0; i < dotsCount; i++) {
-            x[i] = 50 - i * 10;
-            y[i] = 50;
+            x.set(0, 50 - i * FIGURE_SIZE);
+            y.set(0, 50);
         }
-
         locateApple();
-
-        timer = new Timer(140, this);
         timer.start();
     }
 
     private void locateApple() {
-        appleX =  (10 * (int) (Math.random() * 29));
-        appleY =  (10 * (int) (Math.random() * 29));
+        do {
+            appleX = (FIGURE_SIZE * (int) (Math.random() * 29));
+            appleY = (FIGURE_SIZE * (int) (Math.random() * 29));
+        } while (x.contains(appleX) && y.contains(appleY));
     }
 
 
@@ -107,28 +115,29 @@ public class SnakeBoard extends JPanel implements ActionListener {
     }
 
     private void move() {
-        for (int i = dotsCount; i > 0; --i) {
-            x[i] = x[i - 1];
-            y[i] = y[i - 1];
+        for (int i = dotsCount - 1; i > 0; --i) {
+            x.set(i, x.get(i - 1));
+            y.set(i, y.get(i - 1));
         }
         if (leftDirection) {
-            x[0] -= 10;
+            x.set(0, x.get(0) - FIGURE_SIZE);
         } else if (rightDirection) {
-            x[0] += 10;
+            x.set(0, x.get(0) + FIGURE_SIZE);
         } else if (upDirection) {
-            y[0] += 10;
+            y.set(0, y.get(0) + FIGURE_SIZE);
         } else {
-            y[0] -= 10;
+            y.set(0, y.get(0) - FIGURE_SIZE);
         }
     }
 
     private void checkCollision() {
         for (int i = dotsCount; i > 0; --i) {
-            if ((i > 4) && (x[0] == x[i]) && (y[0] == y[i])) {
+            if ((i > 4) && (x.get(0).equals(x.get(i))) && (y.get(0).equals(y.get(i)))) {
                 inGame = false;
+                break;
             }
         }
-        if (y[0] <= 0 || y[0] >= B_HEIGHT || x[0] <= 0 || x[0] >= B_WIDTH) {
+        if (y.get(0) < 0 || y.get(0) > B_HEIGHT || x.get(0) < 0 || x.get(0) > B_WIDTH) {
             inGame = false;
         } else if (!inGame) {
             timer.stop();
@@ -136,7 +145,7 @@ public class SnakeBoard extends JPanel implements ActionListener {
     }
 
     private void checkApple() {
-        if (x[0] == appleX && y[0] == appleY) {
+        if (x.get(0) == appleX && y.get(0) == appleY) {
             dotsCount++;
             locateApple();
         }
@@ -146,28 +155,42 @@ public class SnakeBoard extends JPanel implements ActionListener {
         @Override
         public void keyPressed(KeyEvent e) {
             int key = e.getKeyCode();
-            setFalseToAllDirections();
             switch (key) {
-                case VK_LEFT :
-                    leftDirection = true;
+                case VK_LEFT:
+                    if (!rightDirection) {
+                        leftDirection = true;
+                        upDirection = false;
+                        downDirection = false;
+                    }
                     break;
                 case VK_RIGHT:
-                    rightDirection = true;
+                    if (!leftDirection) {
+                        rightDirection = true;
+                        upDirection = false;
+                        downDirection = false;
+                    }
                     break;
                 case VK_UP:
-                    downDirection = true;
+                    if (!upDirection) {
+                        downDirection = true;
+                        leftDirection = false;
+                        rightDirection = false;
+                    }
                     break;
                 case VK_DOWN:
-                    upDirection = true;
+                    if (!downDirection) {
+                        upDirection = true;
+                        leftDirection = false;
+                        rightDirection = false;
+                    }
                     break;
+                case VK_R:
+                    if (!inGame) {
+                        inGame = true;
+                        initBoard();
+                        initGame();
+                    }
             }
-        }
-
-        private void setFalseToAllDirections() {
-            leftDirection = false;
-            rightDirection = false;
-            upDirection = false;
-            downDirection = false;
         }
     }
 }
